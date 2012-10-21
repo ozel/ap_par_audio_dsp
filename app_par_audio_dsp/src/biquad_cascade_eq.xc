@@ -35,7 +35,7 @@ int biquad_cascade_eq(biquad_cascade_state_eq_s &state, int xn, int power[]) {
 
 #ifdef ASM_BIQUAD_EQ
 //#error "biquadAsmEQ integration not working yet"
-    #pragma xta call "call_0"
+//    #pragma xta call "call_0"
     xn = biquadAsmEQ(xn, state);
 #else
     unsigned int ynl;

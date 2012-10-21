@@ -11,7 +11,7 @@
 //#define DEBUG        	// debug tracing
 //#define INPUT_OVERRIDE
 //#define USE_XSCOPE
-//#define AUDIO_LOOPBACK
+#define AUDIO_LOOPBACK
 //#define XSIM    // run on simulator
 
 /********* Config Switches: ********/
@@ -25,7 +25,7 @@
 #define NUM_EQ_THREADS 1
 
 #define NUM_IN 2  	// input stereo channels
-#define NUM_OUT 3		// output stereo channels
+#define NUM_OUT 2		// output stereo channels
 #define NUM_INP_ACHANS NUM_IN*2
 #define NUM_OUTP_ACHANS NUM_OUT*2
 
@@ -35,7 +35,10 @@
 
 #define DELAY_BUF_SIZE DELAY_SAMPLES
 
-#define MCK_BCK_RATIO 8
+//#define MCLK_MHZ 24576000 //6144000
+#define MCLK_MHZ 6144000
+//#define MCK_BCK_RATIO 8 //12
+#define MCK_BCK_RATIO 12
 // With MCK 24.576MHz and MCK_BCK_RATIO 8
 // sample rate =  24.576MHz / 8 / 64 = 48kHz
 

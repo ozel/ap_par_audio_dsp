@@ -20,21 +20,27 @@
 
 // XMOS Parallel DSP example
 // See README.rst for details
-
+//	XS1_CLKBLK_3,
+//    XS1_CLKBLK_4,
+//    PORT_MCLK,             // Master Clock
+//    PORT_SCLK,            // Bit Clock
+//    PORT_LRCLK,           // LR Clock
+//    {PORT_SDATA_IN0, PORT_SDATA_IN1},
+//    {PORT_SDATA_OUT0, PORT_SDATA_OUT1},
 
 struct iis r_iis = {
-		on stdcore[1] : XS1_CLKBLK_1,
-		on stdcore[1] : XS1_CLKBLK_2,
-		MCK_1, BCK, WCK,
-		{ ADC0, ADC1, ADC2 },
-		{ DAC0, DAC1, DAC2, DAC3 }
+		on stdcore[0] : XS1_CLKBLK_3,
+		on stdcore[0] : XS1_CLKBLK_4,
+		PORT_MCLK, PORT_SCLK, PORT_LRCLK,
+		{ PORT_SDATA_IN0, PORT_SDATA_IN1 },
+		{ PORT_SDATA_OUT0, PORT_SDATA_OUT1 }
 };
 
-out port scl = I2C_SCL;
-port sda = I2C_SDA;
+on stdcore[1]: out port scl = PORT_I2C_SCL;
+on stdcore[1]: port sda = PORT_I2C_SDA;
 
-out port sync_out = SYNC_OUT_4BIT;
-out port rst = SEL_MOD_RST;
+on stdcore[0]: out port sync_out = PORT_SYNC_OUT;
+//out port rst = SEL_MOD_RST;
 
 void init_pll(unsigned mult, out port scl, port sda);
 void reset_codec(out port rst);
@@ -173,6 +179,10 @@ int main()
 
 	par {
 
+		on stdcore[1] : {
+			// 1kHz -> 24.576MHz
+			init_pll(MCLK_MHZ / 1000, scl, sda);
+		}
 
 #ifdef AUDIO_LOOPBACK
 		on stdcore[0] : loopback(0, c_in, c_out);
@@ -181,33 +191,35 @@ int main()
 
 #ifndef XSIM  // reduce the "noise" in the simulator trace
 		// good practise to keep other threads busy
-		on stdcore[0] : busy_thread();
-		on stdcore[0] : busy_thread();
-		on stdcore[0] : busy_thread();
-		on stdcore[0] : busy_thread();
-		on stdcore[0] : busy_thread();
-		on stdcore[0] : busy_thread();
+//		on stdcore[0] : busy_thread();
+//		on stdcore[0] : busy_thread();
+//		on stdcore[0] : busy_thread();
+//		on stdcore[0] : busy_thread();
+//		on stdcore[0] : busy_thread();
+//		on stdcore[0] : busy_thread();
 #endif
 
 		// on core1 because there's a limit of 4 streaming channels across cores.
-		on stdcore[1] : crossover(1, c_in[1], c_out[1], c_out[2]);
+		on stdcore[1] : {
+			crossover(1, c_in[1], c_out[1], c_out[1]);
+		}
+
 		//on stdcore[1] : delays(1, c_in[1], c_out[1]);
 		on stdcore[0] : eq_client(c_ctrl, c_DSP_activity);
 #endif
 
 		// Init PLL, Codec, start I2S tread
-		on stdcore[1] : {
+		on stdcore[0] : {
 			chan stop;
 			char name[3][4] = { "1/2", "3/4", "5/6" };
 			int mode = 0x0;  // clocks connected together
 			int sel = 0x0;   // XCore sync rather than BNC input
 
 #ifndef XSIM
-			// 1kHz -> 24.576MHz
-			init_pll(24576000 / 1000, scl, sda);
-			reset_codec(rst);
-			rst <: 0x8 | mode | sel;
-			init_codec(scl, sda, 0, 0, 0);
+			//reset_codec(rst);
+			//rst <: 0x8 | mode | sel;
+			//init_codec(scl, sda, 0, 0, 0);
+			printf("Startup\n");
 #else
 			printf("Running on Simulator\n");
 #endif
