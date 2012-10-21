@@ -2,3 +2,17 @@
 .DS_Store
 
 .project
+
+app_par_audio_dsp/timing_checks.xta
+
+app_par_audio_dsp/timing_checks.xta
+
+*.d
+
+*.o
+
+app_par_audio_dsp/.cproject
+
+app_par_audio_dsp/timing_checks.xta
+
+app_par_audio_dsp/timing_checks.xtas
