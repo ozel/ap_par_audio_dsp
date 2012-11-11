@@ -52,17 +52,17 @@ static inline void bck_32_ticks(out buffered port:32 bck)
 	bck <: 0x0F0F0F0F;
 #elif MCK_BCK_RATIO == 12
 	bck <: 0x3F03F03F;
-	bck <: 0x03F03F03;
 	bck <: 0xF03F03F0;
+	bck <: 0x03F03F03;
 	bck <: 0x3F03F03F;
-	bck <: 0x03F03F03;
 	bck <: 0xF03F03F0;
+	bck <: 0x03F03F03;
 	bck <: 0x3F03F03F;
-	bck <: 0x03F03F03;
 	bck <: 0xF03F03F0;
+	bck <: 0x03F03F03;
 	bck <: 0x3F03F03F;
-	bck <: 0x03F03F03;
 	bck <: 0xF03F03F0;
+	bck <: 0x03F03F03;
 #else
 #error "MCK/BCK ratio must be 2, 4, 12 or 8"
 #endif

@@ -42,6 +42,8 @@ on stdcore[1]: port sda = PORT_I2C_SDA;
 on stdcore[0]: out port sync_out = PORT_SYNC_OUT;
 //out port rst = SEL_MOD_RST;
 
+on stdcore[1]: port p_mute_led_remote = XS1_PORT_4E; // mute, led remote;
+
 void init_pll(unsigned mult, out port scl, port sda);
 void reset_codec(out port rst);
 void init_codec(out port scl, port sda, int codec_is_master, int mic_input, int instr_input);
@@ -140,6 +142,7 @@ void loopback(unsigned idx, streaming chanend c_in[], streaming chanend c_out[])
 		for(int i=0; i<NUM_IN; i++) {
 			c_in[i] :> in_sample[i];
 		}
+
 		//printf("samples looped back\n");
 	}
 }
@@ -181,7 +184,12 @@ int main()
 
 		on stdcore[1] : {
 			// 1kHz -> 24.576MHz
+			{
+			set_port_drive_low(p_mute_led_remote);
+			p_mute_led_remote <: 0x000;
+			}
 			init_pll(MCLK_MHZ / 1000, scl, sda);
+
 		}
 
 #ifdef AUDIO_LOOPBACK
@@ -201,7 +209,7 @@ int main()
 
 		// on core1 because there's a limit of 4 streaming channels across cores.
 		on stdcore[1] : {
-			crossover(1, c_in[1], c_out[1], c_out[1]);
+			//crossover(1, c_in[1], c_out[1], c_out[0]);
 		}
 
 		//on stdcore[1] : delays(1, c_in[1], c_out[1]);
@@ -228,6 +236,7 @@ int main()
 				clkgen(1000, sync_out, stop);
 				{
 #ifndef XSIM // don't wait 300ms when simulating
+
 					mswait(300);
 #endif
 					iis(r_iis, c_in, c_out);
