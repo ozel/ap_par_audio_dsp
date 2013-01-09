@@ -8,13 +8,12 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <xscope.h>
+#include "fft.h"
 #include "xai2_ports.h"
 #include "iis.h"
 
 #include "defines.h"
-#include "biquad_coeffs.h"
-#include "crossover.h"
-#include "equaliser.h"
 #include "eq_client.h"
 
 
@@ -32,8 +31,8 @@ struct iis r_iis = {
 		on stdcore[0] : XS1_CLKBLK_3,
 		on stdcore[0] : XS1_CLKBLK_4,
 		PORT_MCLK, PORT_SCLK, PORT_LRCLK,
-		{ PORT_SDATA_IN0, PORT_SDATA_IN1 },
-		{ PORT_SDATA_OUT0, PORT_SDATA_OUT1 }
+		{ PORT_SDATA_IN0},
+		{ PORT_SDATA_OUT0}
 };
 
 on stdcore[1]: out port scl = PORT_I2C_SCL;
@@ -53,11 +52,9 @@ void clkgen(int freq, out port p, chanend stop);
 extern void dsp_bypass(unsigned achan_idx);
 extern void sine_out(unsigned achan_idx);
 extern void init_states();
-extern void init_xover(biquad_state_xover_s &state, int zeroDb);
 extern int sine(int x);
 
 extern int delay_proc(unsigned achan_idx, signed in_sample, unsigned delay_buf_idx, unsigned delay);
-extern int biquad_xover(biquad_state_xover_s &state, coeffs_s &coeffs, int xn);
 
 void mswait(int ms)
 {
@@ -70,67 +67,6 @@ void mswait(int ms)
 	}
 }
 
-void crossover(unsigned idx, streaming chanend c_in, streaming chanend c_out_a, streaming chanend c_out_b) {
-	signed in_sample=0;
-	unsigned sample_count=0;
-
-	// HPF: -50 DB below 500Hz
-	// swc_cascaded_biquad Makefile config: FILTER= -min -50 -max 0 -low 500 -step 10
-	coeffs_s lowshelf = {  27106380,  -11382399,   13969018,  -27631332,   13665645};
-
-	// LPF: -50 DB above 500Hz
-	// swc_cascaded_biquad Makefile config: FILTER= -min -50 -max 0 -high 500 -step 10
-	coeffs_s highshelf = { 32681149,  -15926091,    1774726,   -3258144,    1505576};
-
-	biquad_state_xover_s state_hs_0;
-	biquad_state_xover_s state_hs_1;
-	biquad_state_xover_s state_ls_0;
-	biquad_state_xover_s state_ls_1;
-
-	init_xover(state_hs_0,0);
-	init_xover(state_hs_1,0);
-	init_xover(state_ls_0,0);
-	init_xover(state_ls_1,0);
-
-	while(1) {
-		//sync means input buffer contains block ready for processing
-		//c_sync :> unsigned;
-		// filters operate on input and output buffers (shared memory)
-		// Process a number of channels per thread
-
-		if(sample_count & 1) {
-			// right sample
-			c_out_a <: biquad_xover(
-					state_hs_1,
-					highshelf,
-					in_sample
-			);
-			c_out_b <: biquad_xover(
-					state_ls_1,
-					lowshelf,
-					in_sample
-			);
-		} else {
-			// left sample
-			c_out_a <: biquad_xover(
-					state_hs_0,
-					highshelf,
-					in_sample
-			);
-			c_out_b <: biquad_xover(
-					state_ls_0,
-					lowshelf,
-					in_sample
-			);
-		}
-
-		// input happens after output in iis thread!
-		c_in :> in_sample;
-
-		sample_count++;
-	}
-
-}
 
 void loopback(unsigned idx, streaming chanend c_in[], streaming chanend c_out[]) {
 	signed in_sample[NUM_OUT]; //more out than in
@@ -139,7 +75,7 @@ void loopback(unsigned idx, streaming chanend c_in[], streaming chanend c_out[])
 		for(int i=0; i<NUM_OUT; i++) {
 			c_out[i] <: in_sample[i];
 		}
-		for(int i=0; i<NUM_IN; i++) {
+		for(int i=0; i<NUM_OUT; i++) {
 			c_in[i] :> in_sample[i];
 		}
 
@@ -172,6 +108,20 @@ void busy_thread() {
 }
 
 void eq_wrapper(unsigned idx, chanend cCtrl, streaming chanend cDSPActivityOutput, streaming chanend c_in, streaming chanend c_out);
+
+on stdcore[0]: port p_uart_tx = PORT_UART_TX;
+
+void xscope_user_init(void)
+{
+    xscope_register(0);
+    //xscope_config_uart(p_uart_tx);
+
+    // Enable XScope printing
+    xscope_config_io(XSCOPE_IO_BASIC);
+    //xscope_register(2,
+    	//	XSCOPE_CONTINUOUS, "left", XSCOPE_INT, "bit",
+    	//	XSCOPE_CONTINUOUS, "right", XSCOPE_INT, "bit");
+}
 
 int main()
 {
@@ -216,17 +166,10 @@ int main()
 		on stdcore[0] : eq_client(c_ctrl, c_DSP_activity);
 #endif
 
-		// Init PLL, Codec, start I2S tread
+		// Init PLL, start I2S tread
 		on stdcore[0] : {
 			chan stop;
-			char name[3][4] = { "1/2", "3/4", "5/6" };
-			int mode = 0x0;  // clocks connected together
-			int sel = 0x0;   // XCore sync rather than BNC input
-
 #ifndef XSIM
-			//reset_codec(rst);
-			//rst <: 0x8 | mode | sel;
-			//init_codec(scl, sda, 0, 0, 0);
 			printf("Startup\n");
 #else
 			printf("Running on Simulator\n");

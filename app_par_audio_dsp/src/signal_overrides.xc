@@ -8,8 +8,8 @@
 #include "signal_overrides.h"
 #include "defines.h"
 
-unsigned out_x[NUM_OUTP_ACHANS] = {0,0,0,0,0,0,0,0};
-unsigned in_x[NUM_INP_ACHANS] = {0,0,0,0,0,0};
+unsigned out_x[NUM_OUTP_ACHANS] = {0,0};
+unsigned in_x[NUM_INP_ACHANS] = {0,0};
 
 extern int sine(int x);
 

@@ -39,8 +39,8 @@ typedef struct {
 
 void init_equaliser(biquad_cascade_state_eq_s &state, int zeroDb);
 
-int biquad_cascade_eq(biquad_cascade_state_eq_s &state, int xn, int power[]);
+int biquad_cascade_eq(biquad_cascade_state_eq_s &state, int xn);
 
-void update_eq_gain(int bank, int gain, biquad_cascade_state_eq_s &state);
+//void update_eq_gain(int bank, int gain, biquad_cascade_state_eq_s &state);
 
 #endif /* EQUALISER_H_ */

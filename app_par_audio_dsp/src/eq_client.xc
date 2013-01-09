@@ -5,43 +5,67 @@
 
 #include <xs1.h>
 #include "eq_client.h"
+#include "coeffs.h"
 #include "defines.h"
 #include "commands.h"
+#include <stdio.h>
+
+#define ON 0 //enables analysis of power data
 
 #define NUM_PRESETS 3
-char equaliser_presets[NUM_PRESETS][EQ_BANKS] = {
-		{20, 20, 20, 20, 20}, // all 0 dB
-		{0, 5, 10, 15, 20}, // ramp: -20dB, -15dB, -10dB, -dB, 0dB
-		{20, 15, 5, 15, 20}, // reduce mid ranges: -0dB, -5, -15dB, -5dB, 0dB
+char equaliser_presets[NUM_PRESETS][BANKS] = {
+		{0, 0, 0, 0, 0}, // all 0 dB
+		{20, 20, 20, 20, 20}, // ramp: -20dB, -15dB, -10dB, -dB, 0dB
+		{40, 40, 40, 40, 40}, // reduce mid ranges: -0dB, -5, -15dB, -5dB, 0dB
 };
 unsigned preset = 0;
 
 void eq_client(chanend c_ctrl[], streaming chanend c_DSP_activity[]) {
-	timer tmr;
-	unsigned time;
+	timer tmr1, tmr2;
+	unsigned etime,ltime;
 	unsigned update_cnt;
-	tmr :> time;
+	int count, values[BANKS*2];
+
+
+	tmr1 :> etime;
+	tmr2 :> ltime;
 
 	while(1) {
-        time += EQ_UPDATE_PERIOD;
-        tmr when timerafter(time) :> void;
+		select {
+			case tmr1 when timerafter(etime) :> int _1:
+			etime += EQ_UPDATE_PERIOD;
 
-        // Example: Periodically change DB settings for frequency bands
-        // of equaliser connected to c_ctrl[0]
-		for(int i=0; i<EQ_BANKS; i++) {
-			//Both cause ET_ILLEGAL_RESOURCE
-			eq_client_set_band_db(c_ctrl[0], i, equaliser_presets[preset][i]);
-			update_cnt++;
-			if(update_cnt % 2000 == 0) {
-				preset++; // cycle through the presets
-				if(preset==NUM_PRESETS) {
-					preset=0;
+			// Example: Periodically change DB settings for frequency bands
+			// of equaliser connected to c_ctrl[0]
+			for(int i=0; i<BANKS; i++) {
+				//changing preset and i, both at the same time will cause ET_ILLEGAL_RESOURCE error
+				//eq_client_set_band_db(c_ctrl[0], i, equaliser_presets[preset][i]);
+				eq_client_set_band_db(c_ctrl[0], i, equaliser_presets[0][i]);
+				update_cnt++;
+				if(update_cnt % 2000 == 0) {
+					preset++; // cycle through the presets
+					if(preset==NUM_PRESETS) {
+						preset=0;
+					}
 				}
 			}
+			break;
+
+			case ON => tmr2 when timerafter(ltime) :> int _2:
+			ltime += LEVEL_UPDATE_PERIOD;
+			// Use c_DSP_activity for level metering
+			c_DSP_activity[0] <: 1;
+			c_DSP_activity[0] :> count;
+			for(int i=0; i < count; i++){
+				c_DSP_activity[0] :> values[i];
+				//if (values[i] > 100)
+					printf("%i ",values[i]);
+			}
+			//printf("%x %x %x %x %x\n",values[0], values[1], values[2], values[3], values[4]);
+			//printf("\n");
+			break;
 
 		}
-		// Todo:
-		// Use c_DSP_activity for level metering
 	}
 }
 

@@ -5,8 +5,10 @@
 
 #include <xs1.h>
 #include <xclib.h>
-#include "equaliser.h"
+#include "coeffs.h"
+#include "biquadCascade.h"
 #include "commands.h"
+#include "defines.h"
 #include <xscope.h>
 #include <stdio.h>
 
@@ -34,8 +36,14 @@ eqStruct eqNames[2] = {
 
 #define iOS_REFRESH_DELAY 1000000
 
-void eq_block_proc(int power[], biquad_cascade_state_eq_s &eq_stat, unsigned achan_idx);
+void eq_block_proc(int power[], biquadState &eq_stat, unsigned achan_idx);
 void dsp_bypass(unsigned achan_idx);
+
+void update_eq_gain(int bank, int gain, biquadState &state)
+{
+	state.desiredDb[bank] = gain;
+}
+
 
 #pragma unsafe arrays
 void eq_wrapper(unsigned idx, chanend cCtrl, streaming chanend cDSPActivityOutput, streaming chanend c_in, streaming chanend c_out)
@@ -46,10 +54,12 @@ void eq_wrapper(unsigned idx, chanend cCtrl, streaming chanend cDSPActivityOutpu
 
 	signed sample;
 	unsigned sample_count = 0;
+	unsigned col=0, sub=0, subc=0;
 
-	biquad_cascade_state_eq_s r, l;
+    biquadState bsl, bsr;
 
-	int leftPower[EQ_BANKS], rightPower[EQ_BANKS];
+
+	unsigned int leftPower[BANKS], rightPower[BANKS];
 
 #ifdef USE_XSCOPE
 	int si, so; // just for xscope
@@ -64,8 +74,14 @@ void eq_wrapper(unsigned idx, chanend cCtrl, streaming chanend cDSPActivityOutpu
 #endif
 
 	// Do any required DSP initialisation here
-	init_equaliser(l, 20); // index 20 is 0 dB
-	init_equaliser(r, 20);
+    initBiquads(bsl, 0);
+    initBiquads(bsr, 0);
+
+	for(int i =0; i < BANKS; i++)
+	{
+		leftPower[i] = 0;
+		rightPower[i] = 0;
+	}
 
 	c_out <: 0; // output happens first in iis thread
 
@@ -73,80 +89,92 @@ void eq_wrapper(unsigned idx, chanend cCtrl, streaming chanend cDSPActivityOutpu
 	{
 		select
 		{
-case c_in :> sample :
-{
+			case c_in :> sample :
+			{
 
-	for(int i =0; i < EQ_BANKS; i++)
-	{
-		leftPower[i] = 0;
-		rightPower[i] = 0;
-	}
-	if(sample_count & 1) {
+				if(!(sample_count & 1)) {
+					//RIGHT
+			#ifdef USE_XSCOPE
+					si = sample; // signed not accepted by XScope ?
+					xscope_probe_data_pred(0, sample);
+			#endif
+			#ifdef DEBUG
+					printf("EQ input: 0x%x\n",sample);
+			#endif
+					//sample = 0;
+					//sample = biquadCascade(bsr, sample, rightPower);
+			#ifdef USE_XSCOPE
+					so = sample; // signed not accepted by XScope ?
+					xscope_probe_data_pred(1, sample);
+			#endif
+			#ifdef DEBUG
+					printf("EQ output: 0x%x\n",sample);
+			#endif
+					c_out <: sample;
+				} else {
+					//LEFT
+					biquadCascade(bsl, sample, leftPower);
+					#if 1
+					col++;
+					sub=(col%(BANKS*210));
+					if (sub){
+						//printf("%i\n",sub%(BANKS*10) );
+						if(sub < (BANKS*5) || sub%(BANKS*5)){
+							c_out <: 0;
+						}else{
+							if (subc < BANKS){
+								//c_out <: 0x01234500;
+								c_out <: leftPower[subc];
+								subc++;
+							}else{
+								c_out <: 0x0;
+							}
+						}
+					} else {
+						c_out <:0x12345000;
+						subc=0;
+					}
+					#else
+					c_out <: sample ;
+					#endif
+				}
+				sample_count++;
+			}
+			break;
+			case cCtrl :> command:
+				switch (command)
+				{
+				case DSP_COMMAND_CONTROL_STATE:
+					cCtrl :> controlState;
+					// Control information, as defined by eqNames
+					break;
+				case DSP_COMMAND_XMOS_SIMPLEGFXEQ_MESSAGE:
+				{
+					char message, band, boost;
+					cCtrl :> message;
+					if (message == COMMAND_XMOS_SIMPLEGFXEQ_SetBandBoost)
+					{
+						cCtrl :> band;
+						cCtrl :> boost;
+						update_eq_gain(band, boost, bsl);
+						update_eq_gain(band, boost, bsr);
+					}
+				}
+				break;
+				default:
+					break;
+				}
+			break;
 
-#ifdef USE_XSCOPE
-		si = sample; // signed not accepted by XScope ?
-		xscope_probe_data_pred(0, sample);
-#endif
-#ifdef DEBUG
-		printf("EQ input: 0x%x\n",sample);
-#endif
-
-		sample = biquad_cascade_eq(
-				r,
-				sample,
-				rightPower
-		);
-#ifdef USE_XSCOPE
-		so = sample; // signed not accepted by XScope ?
-		xscope_probe_data_pred(1, sample);
-#endif
-#ifdef DEBUG
-		printf("EQ output: 0x%x\n",sample);
-#endif
-		c_out <: sample;
-	} else {
-		c_out <: biquad_cascade_eq(
-				l,
-				sample,
-				leftPower
-		);
-	}
-	sample_count++;
-}
-break;
-case cCtrl :> command:
-	switch (command)
-	{
-	case DSP_COMMAND_CONTROL_STATE:
-		cCtrl :> controlState;
-		// Control information, as defined by eqNames
-		break;
-	case DSP_COMMAND_XMOS_SIMPLEGFXEQ_MESSAGE:
-	{
-		char message, band, boost;
-		cCtrl :> message;
-		if (message == COMMAND_XMOS_SIMPLEGFXEQ_SetBandBoost)
-		{
-			cCtrl :> band;
-			cCtrl :> boost;
-			update_eq_gain(band, boost, l);
-			update_eq_gain(band, boost, r);
-		}
-	}
-	break;
-	default:
-		break;
-	}
-break;
-
-	case cDSPActivityOutput :> int _:
-		cDSPActivityOutput <: EQ_BANKS * 2;
-		for (int i = 0; i < EQ_BANKS; i++)
-		{
-			cDSPActivityOutput <: (char)(32 - clz(leftPower[i])); //32 - clz(x) = log_2(x)
-			cDSPActivityOutput <: (char)(32 - clz(rightPower[i]));
-		}
-		break;
+			case cDSPActivityOutput :> int _:
+				cDSPActivityOutput <: BANKS; // * 2;
+				for (int i = 0; i < BANKS; i++)
+				{
+					//cDSPActivityOutput <: (int)((char)(32 - clz(leftPower[i]))); //32 - clz(x) = log_2(x)
+					cDSPActivityOutput <: leftPower[i];
+					//cDSPActivityOutput <: (char)(32 - clz(rightPower[i]));
+				}
+				break;
 
 		}
 

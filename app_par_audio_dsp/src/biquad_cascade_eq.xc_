@@ -28,11 +28,9 @@ void init_equaliser(biquad_cascade_state_eq_s &state, int zeroDb) {
 extern int biquadAsmEQ(int xn, biquad_cascade_state_eq_s &state);
 
 #pragma unsafe arrays
-int biquad_cascade_eq(biquad_cascade_state_eq_s &state, int xn, int power[]) {
-
+int biquad_cascade_eq(biquad_cascade_state_eq_s &state, int xn) {
 	// difference equation
 	//y(n) = b_0 * x(n) + b_1 * x(n-1) + b_2 * x(n-2) - a_1 * y(n-1) - a_2 * y(n-2)
-
 #ifdef ASM_BIQUAD_EQ
 //#error "biquadAsmEQ integration not working yet"
 //    #pragma xta call "call_0"
@@ -40,7 +38,7 @@ int biquad_cascade_eq(biquad_cascade_state_eq_s &state, int xn, int power[]) {
 #else
     unsigned int ynl;
     int ynh;
-#pragma loop unroll (5)
+//#pragma loop unroll (5)
     for(int j=0; j<EQ_BANKS; j++) {
         ynl = (1<<(FRACTIONALBITS-1)); // 0.5, for rounding, could be triangular noise
         ynh = 0;
@@ -61,7 +59,8 @@ int biquad_cascade_eq(biquad_cascade_state_eq_s &state, int xn, int power[]) {
 
         xn = ynh;
 
-		power[j] += (ynh * ynh) >> 10; //for graphic equaliser display
+		//power[j] += (ynh * ynh) >> 10; //for graphic equaliser display
+        //power[j] = ynh; //for graphic equaliser display
     }
     state.b[EQ_BANKS].xn2 = state.b[EQ_BANKS].xn1;
     state.b[EQ_BANKS].xn1 = ynh;
